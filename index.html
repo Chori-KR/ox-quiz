@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>신나는 몸놀이 OX 퀴즈! 🌟</title>
+  <!-- 구글 폰트: 귀여운 한글 폰트 'Jua'와 둥글둥글한 영문 폰트 'Fredoka' -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Jua&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <!-- 전체 화면 별가루/포인터 캔버스 (마술봉 포인터 렌더링용) -->
+  <canvas id="pointer-canvas"></canvas>
+
+  <!-- 교사용 관리자 진입 버튼 (홈 화면 우측 상단 고정) -->
+  <button id="btn-admin-entry" class="btn-admin-entry">선생님 방 🔑</button>
+
+  <div class="app-container">
+    
+    <!-- 1. 홈 화면 -->
+    <section id="screen-home" class="game-screen active">
+      <div class="card home-card">
+        <h1 class="game-title">
+          <span class="title-sub">몸을 움직여 문제를 풀어요!</span>
+          <span class="title-main">신나는 몸놀이 <span class="highlight-o">O</span><span class="highlight-x">X</span> 퀴즈! 🌟</span>
+        </h1>
+        <div class="mascot-container">
+          <span class="mascot-emoji bounce-animation">🦁</span>
+          <span class="mascot-emoji bounce-animation delay-1">🐰</span>
+          <span class="mascot-emoji bounce-animation delay-2">🐼</span>
+        </div>
+        <p class="intro-text">카메라 앞에 서서 손을 흔들어 요술봉을 움직여요!<br>재미있는 퀴즈를 맞추러 가볼까요?</p>
+        <button id="btn-start" class="btn btn-primary pulse-animation">
+          <span class="btn-icon">🎮</span> 시작하기
+        </button>
+      </div>
+    </section>
+
+    <!-- 2. 카메라 보정 및 대기 화면 -->
+    <section id="screen-calibration" class="game-screen">
+      <div class="card calibration-card">
+        <h2>카메라 준비하기 🎥</h2>
+        <p class="instruction-text">
+          화면 밑의 TV 속에 내 모습이 잘 나오는지 확인해봐요!<br>
+          <strong class="highlight-info">머리와 양쪽 어깨</strong>가 잘 보여야 해요.
+        </p>
+
+        <!-- 카메라 안내 가이드 영역 -->
+        <div class="calibration-view">
+          <div class="guide-box">
+            <div class="guide-circle">머리</div>
+            <div class="guide-line">어깨선</div>
+          </div>
+          <!-- 임시 카메라 로딩 상태 -->
+          <div id="camera-loading" class="status-overlay">
+            <div class="spinner"></div>
+            <p>카메라를 켜고 있어요...</p>
+          </div>
+        </div>
+
+        <div class="calibration-status">
+          <span id="tracking-status" class="status-badge status-waiting">움직임을 기다리는 중... ⏳</span>
+        </div>
+
+        <div class="btn-group">
+          <button id="btn-cal-back" class="btn btn-secondary">뒤로가기</button>
+          <button id="btn-cal-ready" class="btn btn-primary disabled" disabled>준비 완료! 👍</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 퀴즈 진행 화면 -->
+    <section id="screen-quiz" class="game-screen">
+      <!-- 퀴즈 정보 바 -->
+      <div class="quiz-header">
+        <div class="quiz-progress-badge">
+          문제 <span id="current-question-num">1</span> / <span id="total-questions-num">8</span>
+        </div>
+        <div class="quiz-timer">
+          <span class="timer-icon">⏰</span>
+          <div class="timer-bar-container">
+            <div id="timer-bar" class="timer-bar"></div>
+          </div>
+          <span id="timer-text" class="timer-text">15</span>
+        </div>
+        <div class="quiz-score-badge">
+          획득한 별: <span id="score-stars">⭐ 0</span>
+        </div>
+      </div>
+
+      <!-- 문제 영역 -->
+      <div class="question-container">
+        <div class="question-emoji" id="question-emoji">🍎</div>
+        <h2 class="question-text" id="question-text">문제가 여기에 표시됩니다.</h2>
+      </div>
+
+      <!-- OX 선택 판 (양쪽에 배치) -->
+      <div class="ox-board">
+        <!-- O 선택 판 -->
+        <div id="zone-o" class="selection-zone zone-o">
+          <div class="bubble-btn o-btn">
+            <div class="bubble-shadow"></div>
+            <div class="bubble-content">
+              <span class="ox-letter">O</span>
+              <span class="ox-subtext">맞아요!</span>
+            </div>
+            <!-- 원형 선택 게이지 -->
+            <svg class="dwell-progress-svg" viewBox="0 0 120 120">
+              <circle class="dwell-bg" cx="60" cy="60" r="50" />
+              <circle id="dwell-o-progress" class="dwell-bar" cx="60" cy="60" r="50" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- X 선택 판 -->
+        <div id="zone-x" class="selection-zone zone-x">
+          <div class="bubble-btn x-btn">
+            <div class="bubble-shadow"></div>
+            <div class="bubble-content">
+              <span class="ox-letter">X</span>
+              <span class="ox-subtext">틀려요!</span>
+            </div>
+            <!-- 원형 선택 게이지 -->
+            <svg class="dwell-progress-svg" viewBox="0 0 120 120">
+              <circle class="dwell-bg" cx="60" cy="60" r="50" />
+              <circle id="dwell-x-progress" class="dwell-bar" cx="60" cy="60" r="50" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- 힌트 자막 창 -->
+      <div class="hint-container">
+        <span class="hint-icon">💡</span>
+        <span id="hint-text" class="hint-text">동작 힌트가 들어갑니다.</span>
+      </div>
+    </section>
+
+    <!-- 4. 정오답 연출 및 채점 피드백 오버레이 -->
+    <div id="feedback-overlay" class="feedback-overlay">
+      <div class="feedback-content bounce-animation">
+        <div id="feedback-symbol" class="feedback-symbol">⭕</div>
+        <h2 id="feedback-title" class="feedback-title">딩동댕! 정답이에요!</h2>
+        <p id="feedback-desc" class="feedback-desc">설명이 나옵니다.</p>
+      </div>
+    </div>
+
+    <!-- 5. 결과 화면 -->
+    <section id="screen-result" class="game-screen">
+      <div class="card result-card">
+        <h2 class="result-title">🎉 참 잘했어요! 🎉</h2>
+        <div class="trophy-container">
+          <span id="result-trophy-emoji" class="trophy-emoji bounce-animation">🏆</span>
+        </div>
+        
+        <div class="result-stats">
+          <p class="final-score">맞춘 문제: <span id="final-correct-count" class="highlight-score">0</span>개 / 전체 <span id="final-total-count">8</span>개</p>
+          <div id="final-stars-container" class="final-stars">
+            ⭐⭐⭐⭐⭐
+          </div>
+          <h3 id="result-message" class="result-message">정말 멋진 실력이에요!</h3>
+        </div>
+
+        <button id="btn-restart" class="btn btn-primary pulse-animation">
+          <span class="btn-icon">🔄</span> 다시 도전하기
+        </button>
+      </div>
+    </section>
+
+    <!-- 6. 교사용 문제 관리자 화면 -->
+    <section id="screen-admin" class="game-screen">
+      <div class="card admin-card">
+        <h2>선생님 문제 보관함 🔑</h2>
+        <p class="admin-desc">문제를 직접 추가하거나 변경할 수 있어요. 퀴즈는 이 리스트 중에서 무작위로 출제돼요.</p>
+        
+        <div class="admin-actions">
+          <button id="btn-admin-add" class="btn-sm btn-primary">➕ 새 문제 만들기</button>
+          <button id="btn-admin-reset" class="btn-sm btn-secondary">🔄 처음 상태로 되돌리기</button>
+        </div>
+        
+        <div class="table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="width: 12%">이모지</th>
+                <th style="width: 48%">퀴즈 문제 내용</th>
+                <th style="width: 15%">정답</th>
+                <th style="width: 25%">편집/삭제</th>
+              </tr>
+            </thead>
+            <tbody id="admin-question-list">
+              <!-- JS에서 동적으로 채워짐 -->
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="admin-footer">
+          <button id="btn-admin-exit" class="btn btn-secondary">닫기 및 홈으로</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 하단 고정 TV 카메라 피드 (공통 사용) -->
+    <div class="tv-camera-wrapper">
+      <div class="tv-bezel">
+        <div class="tv-screen">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="camera-overlay"></canvas>
+        </div>
+        <div class="tv-details">
+          <span class="tv-brand">KIDS TV 📺</span>
+          <div class="tv-dials">
+            <span class="tv-dial"></span>
+            <span class="tv-dial"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 7. 문제 추가/수정용 모달 팝업 창 -->
+  <div id="modal-question" class="modal">
+    <div class="modal-content card">
+      <h3 id="modal-title" style="font-size: 2.2rem; margin-bottom: 20px; color: var(--color-primary);">새 문제 등록하기</h3>
+      <form id="form-question">
+        <input type="hidden" id="form-question-id">
+        
+        <div class="form-group">
+          <label for="form-emoji">이모지 스티커 (하나만 넣어주세요)</label>
+          <input type="text" id="form-emoji" maxlength="2" placeholder="🍎" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="form-question-text">퀴즈 문제 글귀</label>
+          <input type="text" id="form-question-text" placeholder="사과는 노란색 껍질을 가지고 있어요!" required>
+        </div>
+        
+        <div class="form-group">
+          <label>어느 쪽이 정답인가요?</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="form-answer" value="O" checked>
+              <span class="custom-radio o-radio">O (맞아요)</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="form-answer" value="X">
+              <span class="custom-radio x-radio">X (틀려요)</span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="form-hint">정답 해설 (어린이에게 쉬운 단어로 써주세요)</label>
+          <textarea id="form-hint" rows="2" placeholder="호~ 입김이 부는 추운 겨울에 하얀 눈이 내려요." required></textarea>
+        </div>
+        
+        <div class="btn-group" style="margin-top: 25px;">
+          <button type="button" id="btn-modal-cancel" class="btn btn-secondary">취소</button>
+          <button type="submit" id="btn-modal-save" class="btn btn-primary">저장하기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MediaPipe Tasks Vision Bundle & App Logic -->
+  <script src="./app.js" type="module"></script>
+</body>
+</html>
