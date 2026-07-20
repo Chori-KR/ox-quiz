@@ -20,6 +20,10 @@
 
   <div class="app-container">
     
+    <!-- 공통 동작 인식용 비디오 및 캔버스 (DOM 이동 방지를 위해 최상단에 고정 배치) -->
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="camera-overlay"></canvas>
+    
     <!-- 1. 홈 화면 -->
     <section id="screen-home" class="game-screen active">
       <div class="card home-card">
@@ -29,8 +33,10 @@
         </h1>
         <div class="mascot-container">
           <span class="mascot-emoji bounce-animation">🦁</span>
-          <span class="mascot-emoji bounce-animation delay-1">🐰</span>
-          <span class="mascot-emoji bounce-animation delay-2">🐼</span>
+          <span class="mascot-emoji bounce-animation delay-1">✈️</span>
+          <span class="mascot-emoji bounce-animation delay-2">🍕</span>
+          <span class="mascot-emoji bounce-animation delay-1">🚗</span>
+          <span class="mascot-emoji bounce-animation delay-2">🌟</span>
         </div>
         <p class="intro-text">카메라 앞에 서서 손을 흔들어 요술봉을 움직여요!<br>재미있는 퀴즈를 맞추러 가볼까요?</p>
         <button id="btn-start" class="btn btn-primary pulse-animation">
@@ -44,11 +50,11 @@
       <div class="card calibration-card">
         <h2>카메라 준비하기 🎥</h2>
         <p class="instruction-text">
-          화면 밑의 TV 속에 내 모습이 잘 나오는지 확인해봐요!<br>
+          화면 내의 영역 속에 내 모습이 잘 나오는지 확인해봐요!<br>
           <strong class="highlight-info">머리와 양쪽 어깨</strong>가 잘 보여야 해요.
         </p>
 
-        <!-- 카메라 안내 가이드 영역 -->
+        <!-- 카메라 안내 가이드 영역 (비디오와 캔버스를 이쪽으로 이식하여 직접 재생) -->
         <div class="calibration-view">
           <div class="guide-box">
             <div class="guide-circle">머리</div>
@@ -76,6 +82,7 @@
     <section id="screen-quiz" class="game-screen">
       <!-- 퀴즈 정보 바 -->
       <div class="quiz-header">
+        <button id="btn-quiz-exit" class="btn-sm btn-secondary">🏠 홈으로</button>
         <div class="quiz-progress-badge">
           문제 <span id="current-question-num">1</span> / <span id="total-questions-num">8</span>
         </div>
@@ -93,7 +100,6 @@
 
       <!-- 문제 영역 -->
       <div class="question-container">
-        <div class="question-emoji" id="question-emoji">🍎</div>
         <h2 class="question-text" id="question-text">문제가 여기에 표시됩니다.</h2>
       </div>
 
@@ -130,12 +136,6 @@
             </svg>
           </div>
         </div>
-      </div>
-
-      <!-- 힌트 자막 창 -->
-      <div class="hint-container">
-        <span class="hint-icon">💡</span>
-        <span id="hint-text" class="hint-text">동작 힌트가 들어갑니다.</span>
       </div>
     </section>
 
@@ -178,15 +178,22 @@
         
         <div class="admin-actions">
           <button id="btn-admin-add" class="btn-sm btn-primary">➕ 새 문제 만들기</button>
-          <button id="btn-admin-reset" class="btn-sm btn-secondary">🔄 처음 상태로 되돌리기</button>
+          <button id="btn-admin-bulk-delete" class="btn-sm btn-danger">🗑️ 선택 삭제</button>
+          <div class="toggle-container">
+            <span class="toggle-label">움직임 관절선 보이기 🦴</span>
+            <label class="switch">
+              <input type="checkbox" id="chk-show-skeleton" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
         </div>
         
         <div class="table-container">
           <table class="admin-table">
             <thead>
               <tr>
-                <th style="width: 12%">이모지</th>
-                <th style="width: 48%">퀴즈 문제 내용</th>
+                <th style="width: 8%; text-align: center;"><input type="checkbox" id="chk-select-all"></th>
+                <th style="width: 52%">퀴즈 문제 내용</th>
                 <th style="width: 15%">정답</th>
                 <th style="width: 25%">편집/삭제</th>
               </tr>
@@ -203,23 +210,7 @@
       </div>
     </section>
 
-    <!-- 하단 고정 TV 카메라 피드 (공통 사용) -->
-    <div class="tv-camera-wrapper">
-      <div class="tv-bezel">
-        <div class="tv-screen">
-          <video id="webcam" autoplay playsinline muted></video>
-          <canvas id="camera-overlay"></canvas>
-        </div>
-        <div class="tv-details">
-          <span class="tv-brand">KIDS TV 📺</span>
-          <div class="tv-dials">
-            <span class="tv-dial"></span>
-            <span class="tv-dial"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
+    
   </div>
 
   <!-- 7. 문제 추가/수정용 모달 팝업 창 -->
@@ -229,10 +220,7 @@
       <form id="form-question">
         <input type="hidden" id="form-question-id">
         
-        <div class="form-group">
-          <label for="form-emoji">이모지 스티커 (하나만 넣어주세요)</label>
-          <input type="text" id="form-emoji" maxlength="2" placeholder="🍎" required>
-        </div>
+
         
         <div class="form-group">
           <label for="form-question-text">퀴즈 문제 글귀</label>
@@ -263,6 +251,24 @@
           <button type="submit" id="btn-modal-save" class="btn btn-primary">저장하기</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 커스텀 모달 다이얼로그 (System dialogs 대체용 공통 모달 구조 추가) -->
+  <div id="custom-dialog-modal" class="modal">
+    <div class="modal-content card" style="max-width: 450px !important;">
+      <h3 id="dialog-title" style="font-size: 2rem; color: var(--color-primary); margin-bottom: 15px;">알림 🌟</h3>
+      <p id="dialog-message" style="font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; color: #4a4e69; word-break: keep-all; text-align: center;"></p>
+      
+      <!-- Prompt용 입력 폼 영역 (비밀번호 등 기본 숨김) -->
+      <div id="dialog-prompt-container" style="display: none; margin-bottom: 20px; width: 100%;">
+        <input type="password" id="dialog-prompt-input" style="width: 100%; font-size: 1.25rem; padding: 12px; border: 3px solid #ebdcf5; border-radius: 12px; outline: none; text-align: center;" placeholder="여기에 입력하세요...">
+      </div>
+      
+      <div class="btn-group" style="justify-content: center; gap: 15px; width: 100%;">
+        <button id="btn-dialog-cancel" class="btn btn-secondary btn-sm" style="display: none;">취소</button>
+        <button id="btn-dialog-confirm" class="btn btn-primary btn-sm">확인</button>
+      </div>
     </div>
   </div>
 

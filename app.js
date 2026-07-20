@@ -4,6 +4,16 @@ import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 // LocalStorage 키
 const STORAGE_KEY = 'ox_quiz_questions';
 
+// 관절 연결 구조 정의 (스켈레톤 드로잉용 한글 주석 적용)
+const POSE_CONNECTIONS = [
+  [11, 12], // 양쪽 어깨 연결선
+  [11, 13], [13, 15], // 왼팔 (어깨 - 팔꿈치 - 손목)
+  [12, 14], [14, 16], // 오른팔 (어깨 - 팔꿈치 - 손목)
+  [11, 23], [12, 24], [23, 24], // 몸통 (어깨 - 골반)
+  [23, 25], [25, 27], // 왼다리 (골반 - 무릎 - 발목)
+  [24, 26], [26, 28]  // 오른다리 (골반 - 무릎 - 발목)
+];
+
 // ==========================================
 // 1. 전역 상태 및 DOM 요소 초기화
 // ==========================================
@@ -20,6 +30,8 @@ const state = {
   poseLandmarker: null,
   isTrackingReady: false,
   isCalibrated: false,
+  currentLandmarks: null, // 현재 프레임의 관절 랜드마크 저장소
+  showSkeleton: true,     // 관절 스켈레톤 시각화 표시 여부
   
   // 포인터 좌표 (보간 적용)
   pointer: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
@@ -56,9 +68,8 @@ const els = {
   timerBar: document.getElementById('timer-bar'),
   timerText: document.getElementById('timer-text'),
   scoreStars: document.getElementById('score-stars'),
-  questionEmoji: document.getElementById('question-emoji'),
   questionText: document.getElementById('question-text'),
-  hintText: document.getElementById('hint-text'),
+  btnQuizExit: document.getElementById('btn-quiz-exit'), // 나가기 버튼 캐싱
   
   // OX 버튼 구역
   zoneO: document.getElementById('zone-o'),
@@ -93,7 +104,6 @@ const els = {
   // 교사용 관리 페이지 관련
   btnAdminEntry: document.getElementById('btn-admin-entry'),
   btnAdminAdd: document.getElementById('btn-admin-add'),
-  btnAdminReset: document.getElementById('btn-admin-reset'),
   btnAdminExit: document.getElementById('btn-admin-exit'),
   adminQuestionList: document.getElementById('admin-question-list'),
   
@@ -101,11 +111,90 @@ const els = {
   modalQuestion: document.getElementById('modal-question'),
   formQuestion: document.getElementById('form-question'),
   formQuestionId: document.getElementById('form-question-id'),
-  formEmoji: document.getElementById('form-emoji'),
   formQuestionText: document.getElementById('form-question-text'),
   formHint: document.getElementById('form-hint'),
-  btnModalCancel: document.getElementById('btn-modal-cancel')
+  btnModalCancel: document.getElementById('btn-modal-cancel'),
+  chkShowSkeleton: document.getElementById('chk-show-skeleton') // 관절 온오프 체크박스
 };
+
+// ==========================================
+// 커스텀 모달 다이얼로그 시스템 (alert/confirm/prompt 대체용)
+// ==========================================
+const dialogEls = {
+  modal: document.getElementById('custom-dialog-modal'),
+  title: document.getElementById('dialog-title'),
+  message: document.getElementById('dialog-message'),
+  promptContainer: document.getElementById('dialog-prompt-container'),
+  promptInput: document.getElementById('dialog-prompt-input'),
+  btnCancel: document.getElementById('btn-dialog-cancel'),
+  btnConfirm: document.getElementById('btn-dialog-confirm')
+};
+
+function customAlert(message, title = "알림 🌟") {
+  return new Promise((resolve) => {
+    dialogEls.title.textContent = title;
+    dialogEls.message.innerHTML = message.replace(/\n/g, '<br>');
+    dialogEls.promptContainer.style.display = 'none';
+    dialogEls.btnCancel.style.display = 'none';
+    dialogEls.btnConfirm.style.display = 'inline-block';
+    dialogEls.modal.classList.add('active');
+    
+    const onConfirm = () => {
+      dialogEls.modal.classList.remove('active');
+      dialogEls.btnConfirm.removeEventListener('click', onConfirm);
+      resolve();
+    };
+    dialogEls.btnConfirm.addEventListener('click', onConfirm);
+  });
+}
+
+function customConfirm(message, title = "확인해 주세요 ❓") {
+  return new Promise((resolve) => {
+    dialogEls.title.textContent = title;
+    dialogEls.message.innerHTML = message.replace(/\n/g, '<br>');
+    dialogEls.promptContainer.style.display = 'none';
+    dialogEls.btnCancel.style.display = 'inline-block';
+    dialogEls.btnConfirm.style.display = 'inline-block';
+    dialogEls.modal.classList.add('active');
+    
+    const cleanup = (value) => {
+      dialogEls.modal.classList.remove('active');
+      dialogEls.btnConfirm.removeEventListener('click', onConfirm);
+      dialogEls.btnCancel.removeEventListener('click', onCancel);
+      resolve(value);
+    };
+    const onConfirm = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    
+    dialogEls.btnConfirm.addEventListener('click', onConfirm);
+    dialogEls.btnCancel.addEventListener('click', onCancel);
+  });
+}
+
+function customPrompt(message, defaultValue = "", title = "비밀번호 입력 🔑") {
+  return new Promise((resolve) => {
+    dialogEls.title.textContent = title;
+    dialogEls.message.innerHTML = message.replace(/\n/g, '<br>');
+    dialogEls.promptContainer.style.display = 'block';
+    dialogEls.promptInput.value = defaultValue;
+    dialogEls.btnCancel.style.display = 'inline-block';
+    dialogEls.btnConfirm.style.display = 'inline-block';
+    dialogEls.modal.classList.add('active');
+    setTimeout(() => dialogEls.promptInput.focus(), 100);
+    
+    const cleanup = (value) => {
+      dialogEls.modal.classList.remove('active');
+      dialogEls.btnConfirm.removeEventListener('click', onConfirm);
+      dialogEls.btnCancel.removeEventListener('click', onCancel);
+      resolve(value);
+    };
+    const onConfirm = () => cleanup(dialogEls.promptInput.value);
+    const onCancel = () => cleanup(null);
+    
+    dialogEls.btnConfirm.addEventListener('click', onConfirm);
+    dialogEls.btnCancel.addEventListener('click', onCancel);
+  });
+}
 
 // 캔버스 2D 컨텍스트 설정
 const pointerCtx = els.pointerCanvas.getContext('2d');
@@ -207,15 +296,34 @@ function changeScreen(screenId) {
   els.screens[screenId].classList.add('active');
   state.screen = screenId;
   
-  // 화면별 초기화 로직
+  // 화면별 초기화 로직 및 배경 카메라 전체 화면 클래스 토글
   if (screenId === 'quiz') {
+    document.body.classList.add('quiz-active');
+    document.body.classList.remove('calibration-active');
     startQuiz();
-  } else if (screenId === 'result') {
-    showResult();
+  } else if (screenId === 'calibration') {
+    document.body.classList.add('calibration-active');
+    document.body.classList.remove('quiz-active');
+  } else {
+    document.body.classList.remove('quiz-active', 'calibration-active');
+    if (screenId === 'result') {
+      showResult();
+    }
   }
 }
 
 // 이벤트 리스너 연결
+// 퀴즈 진행 중 나가기 버튼 바인딩
+if (els.btnQuizExit) {
+  els.btnQuizExit.addEventListener('click', async () => {
+    const confirmExit = await customConfirm("정말로 퀴즈를 중단하고 홈으로 돌아갈까요?");
+    if (confirmExit) {
+      stopWebcam();
+      changeScreen('home');
+    }
+  });
+}
+
 els.btnStart.addEventListener('click', () => {
   initAudio();
   changeScreen('calibration');
@@ -246,19 +354,33 @@ function resizeCanvases() {
 window.addEventListener('resize', resizeCanvases);
 resizeCanvases();
 
+// 관절 스켈레톤 온오프 설정 동기화
+const SKELETON_STORAGE_KEY = 'ox_quiz_show_skeleton';
+const savedShowSkeleton = localStorage.getItem(SKELETON_STORAGE_KEY);
+if (savedShowSkeleton !== null) {
+  state.showSkeleton = savedShowSkeleton === 'true';
+}
+if (els.chkShowSkeleton) {
+  els.chkShowSkeleton.checked = state.showSkeleton;
+  els.chkShowSkeleton.addEventListener('change', (e) => {
+    state.showSkeleton = e.target.checked;
+    localStorage.setItem(SKELETON_STORAGE_KEY, e.target.checked);
+  });
+}
+
 // ==========================================
 // 3.5. 교사용 문제 관리 기능 (CRUD) 이벤트 바인딩
 // ==========================================
 
 // 교사 관리자 페이지 입장
-els.btnAdminEntry.addEventListener('click', () => {
-  const pin = prompt("선생님 방 열쇠 🔑 비밀번호를 입력해 주세요.\n(기본 비밀번호: 1234)");
+els.btnAdminEntry.addEventListener('click', async () => {
+  const pin = await customPrompt("선생님 방 열쇠 🔑 비밀번호를 입력해 주세요.\n(기본 비밀번호: 1234)");
   if (pin === '1234') {
     stopWebcam(); // 설정 중일 때는 불필요한 카메라 트래킹 정지
     changeScreen('admin');
     renderAdminTable();
   } else if (pin !== null) {
-    alert("비밀번호가 맞지 않아요! 다시 입력해 주세요.");
+    await customAlert("비밀번호가 맞지 않아요! 다시 입력해 주세요.", "오류 ❌");
   }
 });
 
@@ -272,14 +394,40 @@ els.btnAdminAdd.addEventListener('click', () => {
   openModal();
 });
 
-// 문제 초기화 (기본 세팅 복원)
-els.btnAdminReset.addEventListener('click', () => {
-  if (confirm("정말로 모든 문제를 처음 문제 보관함 상태로 되돌릴까요?\n선생님이 직접 추가하신 문항들은 사라지게 됩니다.")) {
-    saveQuestions(defaultQuestions);
-    renderAdminTable();
-    alert("처음 상태로 되돌려졌습니다! 🔄");
+// 전체 선택 체크박스 동작 바인딩
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'chk-select-all') {
+    const checkboxes = document.querySelectorAll('.chk-question-item');
+    checkboxes.forEach(cb => cb.checked = e.target.checked);
   }
 });
+
+// 선택 삭제 (일괄 삭제) 이벤트 리스너 연결
+const btnBulkDelete = document.getElementById('btn-admin-bulk-delete');
+if (btnBulkDelete) {
+  btnBulkDelete.addEventListener('click', async () => {
+    const selectedCheckboxes = document.querySelectorAll('.chk-question-item:checked');
+    if (selectedCheckboxes.length === 0) {
+      await customAlert("삭제할 문제를 선택해 주세요!", "알림 ⚠️");
+      return;
+    }
+    
+    const confirmDel = await customConfirm(`선택한 ${selectedCheckboxes.length}개의 문제를 삭제하시겠습니까?`);
+    if (confirmDel) {
+      const idsToDelete = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.id));
+      let list = getQuestions();
+      list = list.filter(q => !idsToDelete.includes(q.id));
+      saveQuestions(list);
+      
+      // 전체 선택 상태 해제
+      const chkSelectAll = document.getElementById('chk-select-all');
+      if (chkSelectAll) chkSelectAll.checked = false;
+      
+      renderAdminTable();
+      await customAlert("선택한 문제를 일괄 삭제했습니다. 🗑️", "삭제 완료 🎉");
+    }
+  });
+}
 
 // 모달 취소
 els.btnModalCancel.addEventListener('click', closeModal);
@@ -311,10 +459,12 @@ function renderAdminTable() {
     const badgeClass = q.answer === 'O' ? 'badge-o' : 'badge-x';
     
     tr.innerHTML = `
-      <td class="table-emoji">${q.emoji}</td>
+      <td style="text-align: center;">
+        <input type="checkbox" class="chk-question-item" data-id="${q.id}">
+      </td>
       <td>
         <div style="font-weight: bold; font-size: 1.2rem;">${q.question}</div>
-        <div style="font-size: 0.95rem; color: #777; margin-top: 4px;">💡 힌트: ${q.hint}</div>
+        <div style="font-size: 0.95rem; color: #777; margin-top: 4px;">💡 정답 해설: ${q.hint}</div>
       </td>
       <td style="text-align: center;"><span class="${badgeClass}">${q.answer}</span></td>
       <td>
@@ -343,7 +493,6 @@ function openModal(id = null) {
     const q = list.find(item => item.id === id);
     if (q) {
       els.formQuestionId.value = q.id;
-      els.formEmoji.value = q.emoji;
       els.formQuestionText.value = q.question;
       els.formHint.value = q.hint;
       
@@ -368,7 +517,6 @@ function closeModal() {
 // 문제 추가/수정 데이터 처리
 function saveQuestionForm() {
   const idVal = els.formQuestionId.value;
-  const emojiVal = els.formEmoji.value.trim() || "❓";
   const questionVal = els.formQuestionText.value.trim();
   const hintVal = els.formHint.value.trim();
   
@@ -390,8 +538,7 @@ function saveQuestionForm() {
         id: targetId,
         question: questionVal,
         answer: answerVal,
-        hint: hintVal,
-        emoji: emojiVal
+        hint: hintVal
       };
     }
   } else {
@@ -400,8 +547,7 @@ function saveQuestionForm() {
       id: Date.now(), // 유니크 아이디 생성
       question: questionVal,
       answer: answerVal,
-      hint: hintVal,
-      emoji: emojiVal
+      hint: hintVal
     };
     list.push(newQuestion);
   }
@@ -412,8 +558,9 @@ function saveQuestionForm() {
 }
 
 // 문제 단건 삭제
-function deleteQuestion(id) {
-  if (confirm("정말로 이 문제를 삭제하시겠습니까?")) {
+async function deleteQuestion(id) {
+  const confirmDel = await customConfirm("정말로 이 문제를 삭제하시겠습니까?");
+  if (confirmDel) {
     let list = getQuestions();
     list = list.filter(item => item.id !== id);
     saveQuestions(list);
@@ -466,7 +613,7 @@ async function initWebcam() {
     
   } catch (error) {
     console.error("카메라를 켤 수 없습니다:", error);
-    alert("카메라 연결을 확인할 수 없습니다. 브라우저의 카메라 권한 설정을 확인해 주세요!");
+    await customAlert("카메라 연결을 확인할 수 없습니다. 브라우저의 카메라 권한 설정을 확인해 주세요!", "오류 ❌");
     changeScreen('home');
   }
 }
@@ -520,6 +667,7 @@ function updateLoop(timestamp) {
 function processPoseResults(results) {
   if (results && results.landmarks && results.landmarks.length > 0) {
     const landmarks = results.landmarks[0];
+    state.currentLandmarks = landmarks; // 실시간 랜드마크 갱신 저장
     
     // 주요 키포인트 획득
     const nose = landmarks[0];
@@ -581,6 +729,7 @@ function processPoseResults(results) {
     }
   } else {
     // 아무도 감지되지 않음
+    state.currentLandmarks = null; // 랜드마크 데이터 제거
     if (state.screen === 'calibration' && state.isCalibrated) {
       state.isCalibrated = false;
       els.trackingStatus.textContent = "움직임을 기다리는 중... ⏳";
@@ -630,103 +779,111 @@ function updatePointerPhysics() {
   }
 }
 
-// 전체 화면 포인터 및 요술봉 꼬리 그리기
+// 전체 화면 포인터 및 요술봉 꼬리 그리기 (별 캐릭터 삭제 처리)
 function drawPointerCanvas() {
   pointerCtx.clearRect(0, 0, els.pointerCanvas.width, els.pointerCanvas.height);
-  
-  // 1. 파티클 그리기
-  particles.forEach(p => {
-    pointerCtx.save();
-    pointerCtx.globalAlpha = p.alpha;
-    pointerCtx.fillStyle = p.color;
-    drawStar(pointerCtx, p.x, p.y, 5, p.size, p.size / 2);
-    pointerCtx.restore();
-  });
-  
-  // 2. 활성화된 요술봉 머리 그리기 (별 캐릭터 또는 요술봉 모양)
-  if (state.isHandActive) {
-    pointerCtx.save();
-    // 별 외곽선 네온 효과
-    pointerCtx.shadowBlur = 20;
-    pointerCtx.shadowColor = "#ffeb3b";
-    pointerCtx.fillStyle = "#ffea79"; // 예쁜 옐로우 별
-    pointerCtx.strokeStyle = "#fff";
-    pointerCtx.lineWidth = 3;
-    
-    // 메인 요술봉 별 헤드 그리기
-    drawStar(pointerCtx, state.pointer.x, state.pointer.y, 5, 25, 11);
-    
-    // 별 얼굴 그려주기 (유아 타겟 친근성 극대화!)
-    pointerCtx.fillStyle = "#333";
-    pointerCtx.beginPath();
-    // 왼쪽 눈
-    pointerCtx.arc(state.pointer.x - 5, state.pointer.y - 2, 2.5, 0, Math.PI * 2);
-    // 오른쪽 눈
-    pointerCtx.arc(state.pointer.x + 5, state.pointer.y - 2, 2.5, 0, Math.PI * 2);
-    pointerCtx.fill();
-    
-    // 웃는 입
-    pointerCtx.strokeStyle = "#333";
-    pointerCtx.lineWidth = 1.5;
-    pointerCtx.beginPath();
-    pointerCtx.arc(state.pointer.x, state.pointer.y + 4, 4, 0, Math.PI);
-    pointerCtx.stroke();
-    
-    pointerCtx.restore();
-  }
 }
 
-// 별 형태를 그리는 헬퍼 함수
-function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
-  let rot = Math.PI / 2 * 3;
-  let x = cx;
-  let y = cy;
-  let step = Math.PI / spikes;
-
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - outerRadius);
-  for (let i = 0; i < spikes; i++) {
-    x = cx + Math.cos(rot) * outerRadius;
-    y = cy + Math.sin(rot) * outerRadius;
-    ctx.lineTo(x, y);
-    rot += step;
-
-    x = cx + Math.cos(rot) * innerRadius;
-    y = cy + Math.sin(rot) * innerRadius;
-    ctx.lineTo(x, y);
-    rot += step;
-  }
-  ctx.lineTo(cx, cy - outerRadius);
-  ctx.closePath();
-  ctx.fill();
-  if (ctx.strokeStyle !== "rgba(0, 0, 0, 0)") {
-    ctx.stroke();
-  }
-}
-
-// TV 프레임 안쪽 작은 오버레이에 가이드라인 및 인식 표시
+// 보정 가이드라인 및 관절 스켈레톤, 손끝 조준점 그리기 (복구됨)
 function drawCameraOverlay() {
   cameraCtx.clearRect(0, 0, 640, 480);
-  // 스켈레톤 대신, 사용자가 본인이 잘 추적되고 있는지 귀엽게 보여주기 위해 얼굴/손 부위에만 파스텔톤 동그라미 표시
-  if (state.isCalibrated && state.isHandActive) {
-    // 캔버스 중앙에 요술봉 트래킹 중임을 텍스트로 작게 표시
+  
+  if (!state.isTrackingReady || !state.currentLandmarks) return;
+  
+  const landmarks = state.currentLandmarks;
+  
+  // 1. 관절 연결선 그리기 (뼈대 선) - 설정이 켜져 있을 때만
+  if (state.showSkeleton) {
     cameraCtx.save();
-    cameraCtx.fillStyle = "rgba(46, 196, 182, 0.7)";
-    cameraCtx.beginPath();
-    // 손 트래킹 지점에 귀여운 마크
-    const rawX = state.targetPointer.x / window.innerWidth * 640;
-    const rawY = state.targetPointer.y / window.innerHeight * 480;
-    cameraCtx.arc(rawX, rawY, 15, 0, Math.PI * 2);
-    cameraCtx.fill();
+    cameraCtx.strokeStyle = "rgba(46, 196, 182, 0.9)"; // 귀여운 민트색 형광선
+    cameraCtx.lineWidth = 6;
+    cameraCtx.lineCap = "round";
+    cameraCtx.lineJoin = "round";
+    
+    POSE_CONNECTIONS.forEach(([i1, i2]) => {
+      const pt1 = landmarks[i1];
+      const pt2 = landmarks[i2];
+      
+      // 인지 정확도(visibility)가 50% 이상일 때만 스켈레톤 선을 연결
+      if (pt1 && pt2 && pt1.visibility > 0.5 && pt2.visibility > 0.5) {
+        cameraCtx.beginPath();
+        cameraCtx.moveTo(pt1.x * 640, pt1.y * 480);
+        cameraCtx.lineTo(pt2.x * 640, pt2.y * 480);
+        cameraCtx.stroke();
+      }
+    });
+    cameraCtx.restore();
+    
+    // 2. 주요 골격 노드(관절 포인트) 원형 마크 그리기
+    const keyJoints = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // 시각화할 핵심 관절들
+    
+    cameraCtx.save();
+    keyJoints.forEach(index => {
+      const pt = landmarks[index];
+      if (pt && pt.visibility > 0.5) {
+        // 흰색 외곽선 원
+        cameraCtx.fillStyle = "#ffffff";
+        cameraCtx.beginPath();
+        cameraCtx.arc(pt.x * 640, pt.y * 480, 8, 0, Math.PI * 2);
+        cameraCtx.fill();
+        
+        // 내부 핑크색 원 포인트
+        cameraCtx.fillStyle = "#ff769f";
+        cameraCtx.beginPath();
+        cameraCtx.arc(pt.x * 640, pt.y * 480, 5, 0, Math.PI * 2);
+        cameraCtx.fill();
+      }
+    });
     cameraCtx.restore();
   }
+  
+  // 3. 손끝(양손 검지 19, 20번) 위치에 실시간 터치 마커 도트 렌더링 (동작 인지 가독성 향상)
+  const leftIndex = landmarks[19];
+  const rightIndex = landmarks[20];
+  
+  cameraCtx.save();
+  cameraCtx.fillStyle = "rgba(46, 196, 182, 0.9)"; // 형광 민트색 포인터
+  cameraCtx.strokeStyle = "#ffffff";
+  cameraCtx.lineWidth = 3;
+  
+  [leftIndex, rightIndex].forEach(pt => {
+    if (pt && pt.visibility > 0.5) {
+      cameraCtx.beginPath();
+      cameraCtx.arc(pt.x * 640, pt.y * 480, 10, 0, Math.PI * 2);
+      cameraCtx.fill();
+      cameraCtx.stroke();
+    }
+  });
+  cameraCtx.restore();
 }
 
 // ==========================================
-// 7. 충돌 판정 및 Dwell Time 선택 기능
+// 7. 충돌 판정 및 Dwell Time 선택 기능 (양손 검지 손가락 끝 다이렉트 터치형)
 // ==========================================
 function checkDwellSelection(deltaTime) {
-  if (!state.isHandActive) {
+  // 양손 검지 손가락 끝의 스크린 좌표 획득
+  let hands = [];
+  if (state.currentLandmarks) {
+    const leftIndex = state.currentLandmarks[19]; // 왼쪽 검지 손가락 끝 랜드마크
+    const rightIndex = state.currentLandmarks[20]; // 오른쪽 검지 손가락 끝 랜드마크
+    
+    // 왼손이 감지될 경우 스크린 크기로 좌표 맵핑 (가로 미러링 반영)
+    if (leftIndex && leftIndex.visibility > 0.5) {
+      hands.push({
+        x: (1 - leftIndex.x) * window.innerWidth,
+        y: leftIndex.y * window.innerHeight
+      });
+    }
+    // 오른손이 감지될 경우 스크린 크기로 좌표 맵핑 (가로 미러링 반영)
+    if (rightIndex && rightIndex.visibility > 0.5) {
+      hands.push({
+        x: (1 - rightIndex.x) * window.innerWidth,
+        y: rightIndex.y * window.innerHeight
+      });
+    }
+  }
+  
+  if (hands.length === 0) {
     resetDwell();
     return;
   }
@@ -735,11 +892,26 @@ function checkDwellSelection(deltaTime) {
   const rectO = els.zoneO.getBoundingClientRect();
   const rectX = els.zoneX.getBoundingClientRect();
   
-  const px = state.pointer.x;
-  const py = state.pointer.y;
+  let hitO = false;
+  let hitX = false;
   
-  // O 영역 충돌 체크
-  if (px >= rectO.left && px <= rectO.right && py >= rectO.top && py <= rectO.bottom) {
+  // 양손 중 어떤 한 손이라도 선택 영역에 들어왔는지 전수 조사
+  hands.forEach(hand => {
+    const px = hand.x;
+    const py = hand.y;
+    
+    // O 영역 내 진입 여부
+    if (px >= rectO.left && px <= rectO.right && py >= rectO.top && py <= rectO.bottom) {
+      hitO = true;
+    }
+    // X 영역 내 진입 여부
+    if (px >= rectX.left && px <= rectX.right && py >= rectX.top && py <= rectX.bottom) {
+      hitX = true;
+    }
+  });
+  
+  // O 과녁 충돌 처리
+  if (hitO) {
     state.dwellO += deltaTime;
     state.dwellX = 0;
     
@@ -750,7 +922,7 @@ function checkDwellSelection(deltaTime) {
     updateDwellRing(els.dwellOProgress, pct);
     updateDwellRing(els.dwellXProgress, 0);
     
-    // 오작동 방지용 차징음 생성 (가속 펄스음)
+    // 차징음 틱소리
     if (state.dwellO > 100 && Math.floor(state.dwellO / 150) > Math.floor((state.dwellO - deltaTime) / 150)) {
       sounds.tick();
     }
@@ -760,8 +932,8 @@ function checkDwellSelection(deltaTime) {
       resetDwell();
     }
   } 
-  // X 영역 충돌 체크
-  else if (px >= rectX.left && px <= rectX.right && py >= rectX.top && py <= rectX.bottom) {
+  // X 과녁 충돌 처리
+  else if (hitX) {
     state.dwellX += deltaTime;
     state.dwellO = 0;
     
@@ -786,6 +958,8 @@ function checkDwellSelection(deltaTime) {
     resetDwell();
   }
 }
+
+
 
 function resetDwell() {
   state.dwellO = 0;
@@ -831,11 +1005,9 @@ function startQuiz() {
 function showQuestion(index) {
   const q = state.questions[index];
   
-  // 텍스트 및 이모지 바인딩
+  // 텍스트 바인딩
   els.currentQuestionNum.textContent = index + 1;
-  els.questionEmoji.textContent = q.emoji;
   els.questionText.textContent = q.question;
-  els.hintText.textContent = q.hint;
   els.scoreStars.textContent = `⭐ ${state.score}`;
   
   // 게이지 초기화
