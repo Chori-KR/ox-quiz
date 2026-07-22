@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Jua&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/ox-quiz/assets/index-D5VaCxq7.js"></script>
-  <link rel="stylesheet" crossorigin href="/ox-quiz/assets/index-Cu7gC8pB.css">
+  <script type="module" crossorigin src="/ox-quiz/assets/index-CxfcEQXz.js"></script>
+  <link rel="stylesheet" crossorigin href="/ox-quiz/assets/index-bLmAO_aU.css">
 </head>
 <body>
 
@@ -27,19 +27,6 @@
     
     <!-- 1. 홈 화면 -->
     <section id="screen-home" class="game-screen active">
-      <!-- 브랜딩 로고 (상단 우측 고정 배치) -->
-      <div class="brand-logo">
-        <div class="brand-logo-text">
-          <div class="brand-logo-title">
-            <span class="copyright-icon">c</span>Creator Chori Sam
-          </div>
-          <div class="brand-logo-subtitle">모두를 위한 재미있는 에듀테크</div>
-        </div>
-        <div class="brand-logo-avatar">
-          <!-- 실제 이미지 파일로 대체하고 싶으실 경우, 아래 span 대신 <img src="이미지파일명.png" alt="호랑이"> 형태로 넣으시면 됩니다. -->
-          <span class="tiger-emoji">🐯</span>
-        </div>
-      </div>
 
       <div class="card home-card">
         <h1 class="game-title">
@@ -57,6 +44,19 @@
         <button id="btn-start" class="btn btn-primary pulse-animation">
           <span class="btn-icon">🎮</span> 시작하기
         </button>
+      </div>
+
+      <!-- 홈 화면 전용 하단 브랜딩 로고 -->
+      <div class="brand-logo-home">
+        <div class="brand-logo-text">
+          <div class="brand-logo-title">
+            <span class="copyright-icon">c</span>Creator Chori Sam
+          </div>
+          <div class="brand-logo-subtitle">모두를 위한 재미있는 에듀테크</div>
+        </div>
+        <div class="brand-logo-avatar">
+          <span class="tiger-emoji">🐯</span>
+        </div>
       </div>
     </section>
 
@@ -224,18 +224,30 @@
         </div>
       </div>
     </section>
+</div>
 
-    
-  </div>
-
+<!-- 커스텀 모달 다이얼로그 (System dialogs 대체용 공통 모달 구조 추가) -->
+  <div id="custom-dialog-modal" class="modal">
+    <div class="modal-content card" style="max-width: 450px !important;">
+      <h3 id="dialog-title" style="font-size: 2rem; color: var(--color-primary); margin-bottom: 15px;">알림 🌟</h3>
+      <p id="dialog-message" style="font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; color: #4a4e69; word-break: keep-all; text-align: center;"></p>
+      
+      <!-- Prompt용 입력 폼 영역 (비밀번호 등 기본 숨김) -->
+      <div id="dialog-prompt-container" style="display: none; margin-bottom: 20px; width: 100%;">
+        <input type="password" id="dialog-prompt-input" style="width: 100%; font-size: 1.25rem; padding: 12px; border: 3px solid #ebdcf5; border-radius: 12px; outline: none; text-align: center;" placeholder="여기에 입력하세요...">
+      </div>
+      
+      <div class="btn-group" style="justify-content: center; gap: 15px; width: 100%;">
+        <button id="btn-dialog-cancel" class="btn btn-secondary btn-sm" style="display: none;">취소</button>
+        <button id="btn-dialog-confirm" class="btn btn-primary btn-sm">확인</button>
+      </div>
+    </div>
   <!-- 7. 문제 추가/수정용 모달 팝업 창 -->
   <div id="modal-question" class="modal">
     <div class="modal-content card">
       <h3 id="modal-title" style="font-size: 2.2rem; margin-bottom: 20px; color: var(--color-primary);">새 문제 등록하기</h3>
       <form id="form-question">
         <input type="hidden" id="form-question-id">
-        
-
         
         <div class="form-group">
           <label for="form-question-text">퀴즈 문제 글귀</label>
@@ -266,24 +278,6 @@
           <button type="submit" id="btn-modal-save" class="btn btn-primary">저장하기</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- 커스텀 모달 다이얼로그 (System dialogs 대체용 공통 모달 구조 추가) -->
-  <div id="custom-dialog-modal" class="modal">
-    <div class="modal-content card" style="max-width: 450px !important;">
-      <h3 id="dialog-title" style="font-size: 2rem; color: var(--color-primary); margin-bottom: 15px;">알림 🌟</h3>
-      <p id="dialog-message" style="font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; color: #4a4e69; word-break: keep-all; text-align: center;"></p>
-      
-      <!-- Prompt용 입력 폼 영역 (비밀번호 등 기본 숨김) -->
-      <div id="dialog-prompt-container" style="display: none; margin-bottom: 20px; width: 100%;">
-        <input type="password" id="dialog-prompt-input" style="width: 100%; font-size: 1.25rem; padding: 12px; border: 3px solid #ebdcf5; border-radius: 12px; outline: none; text-align: center;" placeholder="여기에 입력하세요...">
-      </div>
-      
-      <div class="btn-group" style="justify-content: center; gap: 15px; width: 100%;">
-        <button id="btn-dialog-cancel" class="btn btn-secondary btn-sm" style="display: none;">취소</button>
-        <button id="btn-dialog-confirm" class="btn btn-primary btn-sm">확인</button>
-      </div>
     </div>
   </div>
 
