@@ -1346,12 +1346,9 @@ input:checked + .slider:before {
   border-radius: 50%;
 }
 
-/* 우측 상단 브랜딩 로고 컴포넌트 */
-.brand-logo {
-  position: absolute;
-  top: 30px;
-  right: 35px;
-  display: flex;
+/* 홈 화면 전용 하단 브랜딩 로고 (비고정, static 정중앙 정렬) */
+.brand-logo-home {
+  display: inline-flex;
   align-items: center;
   gap: 12px;
   background: rgba(255, 255, 255, 0.95);
@@ -1359,11 +1356,12 @@ input:checked + .slider:before {
   border-radius: 22px;
   box-shadow: 0 8px 24px rgba(117, 79, 154, 0.08);
   border: 3px solid #ebdcf5;
-  z-index: 100;
   transition: all 0.3s ease;
+  margin-top: 30px; /* 메인 카드와의 여백 */
+  margin-bottom: 20px;
 }
 
-.brand-logo:hover {
+.brand-logo-home:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(117, 79, 154, 0.12);
 }
@@ -1377,7 +1375,7 @@ input:checked + .slider:before {
 .brand-logo-title {
   font-family: var(--font-family);
   font-size: 1.25rem;
-  color: #ff851b; /* 주황색 톤 */
+  color: #ff851b;
   font-weight: bold;
   display: flex;
   align-items: center;
@@ -1402,7 +1400,7 @@ input:checked + .slider:before {
 .brand-logo-subtitle {
   font-family: var(--font-family);
   font-size: 0.85rem;
-  color: #8c92ac; /* 그레이 */
+  color: #8c92ac;
   margin-top: 3px;
   letter-spacing: -0.2px;
 }
@@ -1410,7 +1408,7 @@ input:checked + .slider:before {
 .brand-logo-avatar {
   width: 44px;
   height: 44px;
-  background: #fff8e7; /* 크림 베이지 배경 */
+  background: #fff8e7;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1429,9 +1427,8 @@ input:checked + .slider:before {
 
 /* 모바일 모드 반응형 최적화 */
 @media (max-width: 600px) {
-  .brand-logo {
-    top: 15px;
-    right: 15px;
+  .brand-logo-home {
+    margin-top: 20px;
     padding: 6px 12px;
     gap: 8px;
   }
@@ -1453,5 +1450,15 @@ input:checked + .slider:before {
     font-size: 1.3rem;
   }
 }
+
+
+
+
+
+
+  
+
+
+
 
 
