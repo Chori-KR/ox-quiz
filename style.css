@@ -840,6 +840,47 @@ body:has(.game-screen:not(#screen-home).active) .btn-admin-entry {
   margin-bottom: 15px;
 }
 
+/* 퀴즈 관리자 설정 패널 스타일 */
+.admin-settings-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 30px;
+  background-color: #f7f2fa;
+  border: 3px dashed #ebdcf5;
+  border-radius: 15px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.admin-settings-panel .setting-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-settings-panel .setting-item label {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #6247aa;
+}
+
+.admin-settings-panel .setting-item input[type="number"] {
+  font-family: var(--font-family);
+  font-size: 1.2rem;
+  padding: 6px 10px;
+  border: 2px solid #ebdcf5;
+  border-radius: 10px;
+  width: 75px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.admin-settings-panel .setting-item input[type="number"]:focus {
+  border-color: #6247aa;
+}
+
 /* 테이블 영역 */
 .table-container {
   max-height: 350px;

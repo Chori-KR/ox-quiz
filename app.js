@@ -3,6 +3,9 @@ import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 // LocalStorage 키
 const STORAGE_KEY = 'ox_quiz_questions';
+const TIMER_LIMIT_KEY = 'ox_quiz_timer_limit';
+const QUESTION_COUNT_KEY = 'ox_quiz_question_count';
+const TTS_ENABLED_KEY = 'ox_quiz_tts_enabled';
 
 // 관절 연결 구조 정의 (스켈레톤 드로잉용 한글 주석 적용)
 const POSE_CONNECTIONS = [
@@ -23,7 +26,13 @@ const state = {
   score: 0,
   timer: 15,
   timerInterval: null,
-  questions: [], // 실제 플레이할 무작위 5문항 리스트
+  feedbackTimeout: null, // 다음 문제 전환 대기 타이머 식별자 (중도 퇴장 시 정리용)
+  questions: [], // 실제 플레이할 무작위 문항 리스트
+  
+  // 선생님 방 추가 설정값 (초기값 지정 후 localStorage 로드 예정)
+  limitTime: 15,
+  questionCount: 5,
+  ttsEnabled: true,
   
   // 카메라 및 동작 인식 상태
   webcamStream: null,
@@ -106,6 +115,11 @@ const els = {
   btnAdminAdd: document.getElementById('btn-admin-add'),
   btnAdminExit: document.getElementById('btn-admin-exit'),
   adminQuestionList: document.getElementById('admin-question-list'),
+  
+  // 교사용 관리자 설정 요소
+  inputQuizTime: document.getElementById('input-quiz-time'),
+  inputQuizCount: document.getElementById('input-quiz-count'),
+  chkTtsEnabled: document.getElementById('chk-tts-enabled'),
   
   // 문제 편집용 모달 관련
   modalQuestion: document.getElementById('modal-question'),
@@ -220,6 +234,39 @@ function saveQuestions(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
+// [선생님 설정] 설정 데이터 로드 함수 (한글 주석 적용)
+function loadSettings() {
+  const savedLimitTime = localStorage.getItem(TIMER_LIMIT_KEY);
+  if (savedLimitTime !== null) {
+    state.limitTime = parseInt(savedLimitTime, 10);
+  }
+  
+  const savedQuestionCount = localStorage.getItem(QUESTION_COUNT_KEY);
+  if (savedQuestionCount !== null) {
+    state.questionCount = parseInt(savedQuestionCount, 10);
+  }
+  
+  const savedTtsEnabled = localStorage.getItem(TTS_ENABLED_KEY);
+  if (savedTtsEnabled !== null) {
+    state.ttsEnabled = savedTtsEnabled === 'true';
+  }
+  
+  // UI 설정 화면에 값 동기화
+  if (els.inputQuizTime) els.inputQuizTime.value = state.limitTime;
+  if (els.inputQuizCount) els.inputQuizCount.value = state.questionCount;
+  if (els.chkTtsEnabled) els.chkTtsEnabled.checked = state.ttsEnabled;
+}
+
+// [선생님 설정] 설정 데이터 저장 함수
+function saveSettings() {
+  localStorage.setItem(TIMER_LIMIT_KEY, state.limitTime);
+  localStorage.setItem(QUESTION_COUNT_KEY, state.questionCount);
+  localStorage.setItem(TTS_ENABLED_KEY, state.ttsEnabled);
+}
+
+// 앱 구동 즉시 설정 정보 로드 실행
+loadSettings();
+
 // ==========================================
 // 2. Web Audio API 오디오 신디사이저 (어린이 맞춤 밝은 톤)
 // ==========================================
@@ -284,9 +331,56 @@ const sounds = {
 };
 
 // ==========================================
+// 2.5. TTS (음성 합성) 문제 읽어주기 기능 (한글 주석 적용)
+// ==========================================
+function speakQuestion(text) {
+  if (!state.ttsEnabled) return;
+  
+  // 이모지 및 특수 그림 문자(유니코드 범위)를 제거하는 정규식 필터링 (한글 주석 적용)
+  const cleanedText = text.replace(/[\u{1F300}-\u{1FAFF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]/gu, '');
+
+  // 현재 재생 중인 모든 음성을 중단하여 소리가 겹치는 현상 방지
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
+    utterance.lang = 'ko-KR';
+    
+    // 어린이 전용 커스텀 튜닝: 목소리 속도를 약간 늦추고(0.95), 톤을 조금 귀엽게 높임(1.15)
+    utterance.rate = 0.95;
+    utterance.pitch = 1.15;
+    
+    // 디바이스에 한글 TTS 보이스가 여러 개 탑재된 경우, 최적의 한국어 목소리를 찾아 매핑
+    const voices = window.speechSynthesis.getVoices();
+    const koreanVoice = voices.find(voice => voice.lang.includes('ko-KR') || voice.lang.includes('ko_KR'));
+    if (koreanVoice) {
+      utterance.voice = koreanVoice;
+    }
+    
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
+// ==========================================
 // 3. 화면 전환 및 이벤트 바인딩
 // ==========================================
 function changeScreen(screenId) {
+  // 퀴즈 진행 중이 아닌 다른 화면으로 이탈 시, 살아있는 타이머들을 완전 박멸 (한글 주석 적용)
+  if (screenId !== 'quiz') {
+    if (state.timerInterval) {
+      clearInterval(state.timerInterval);
+      state.timerInterval = null;
+    }
+    if (state.feedbackTimeout) {
+      clearTimeout(state.feedbackTimeout);
+      state.feedbackTimeout = null;
+    }
+    // 피드백 팝업 오버레이 강제 제거
+    if (els.feedbackOverlay) {
+      els.feedbackOverlay.classList.remove('active');
+    }
+  }
+
   // 모든 화면 비활성화
   Object.keys(els.screens).forEach(key => {
     els.screens[key].classList.remove('active');
@@ -318,6 +412,7 @@ if (els.btnQuizExit) {
   els.btnQuizExit.addEventListener('click', async () => {
     const confirmExit = await customConfirm("정말로 퀴즈를 중단하고 홈으로 돌아갈까요?");
     if (confirmExit) {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
       stopWebcam();
       changeScreen('home');
     }
@@ -386,8 +481,41 @@ els.btnAdminEntry.addEventListener('click', async () => {
 
 // 교사 페이지 퇴장
 els.btnAdminExit.addEventListener('click', () => {
+  saveSettings();
   changeScreen('home');
 });
+
+// [선생님 설정] 설정 변경 감지 및 저장 이벤트 바인딩 (한글 주석 적용)
+if (els.inputQuizTime) {
+  els.inputQuizTime.addEventListener('input', (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (!isNaN(val)) {
+      // 5초보다 작으면 강제로 5초로 최소값 보정
+      if (val < 5) val = 5;
+      state.limitTime = val;
+      saveSettings();
+    }
+  });
+}
+
+if (els.inputQuizCount) {
+  els.inputQuizCount.addEventListener('input', (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (!isNaN(val)) {
+      // 최소 1문제 이상 보정
+      if (val < 1) val = 1;
+      state.questionCount = val;
+      saveSettings();
+    }
+  });
+}
+
+if (els.chkTtsEnabled) {
+  els.chkTtsEnabled.addEventListener('change', (e) => {
+    state.ttsEnabled = e.target.checked;
+    saveSettings();
+  });
+}
 
 // 새 문제 모달 열기
 els.btnAdminAdd.addEventListener('click', () => {
@@ -988,15 +1116,16 @@ function startQuiz() {
   // LocalStorage로부터 데이터 로드
   const allQuestions = getQuestions();
   
-  if (allQuestions.length < 5) {
-    alert("출제할 수 있는 문제가 너무 부족해요! 😭\n선생님 방에서 문제를 최소 5개 이상 등록해 주세요.");
+  // 현재 설정된 목표 문제 수보다 등록된 전체 문제 수가 적으면 예외 알림
+  if (allQuestions.length < state.questionCount) {
+    alert(`출제할 수 있는 문제가 부족해요! 😭\n선생님 방에서 문제를 최소 ${state.questionCount}개 이상 등록하거나 출제 문제 수를 낮춰주세요.`);
     changeScreen('home');
     stopWebcam();
     return;
   }
   
-  // 문제를 무작위로 5개 선정해서 게임 리스트에 넣음 (아동 피로도 방지용 5문항 축소)
-  state.questions = [...allQuestions].sort(() => 0.5 - Math.random()).slice(0, 5);
+  // 문제를 무작위로 셔플 후 선생님이 지정한 개수만큼 잘라서 게임 리스트에 넣음 (한글 주석 적용)
+  state.questions = [...allQuestions].sort(() => 0.5 - Math.random()).slice(0, state.questionCount);
   
   els.totalQuestionsNum.textContent = state.questions.length;
   showQuestion(state.currentQuestionIndex);
@@ -1013,17 +1142,20 @@ function showQuestion(index) {
   // 게이지 초기화
   resetDwell();
   
-  // 타이머 15초 세팅
-  state.timer = 15;
+  // 선생님 설정값인 limitTime으로 타이머 세팅 (15초 하드코딩 제거)
+  state.timer = state.limitTime;
   els.timerText.textContent = state.timer;
   els.timerBar.style.width = '100%';
+  
+  // 문제 출제와 동시에 어린이들에게 음성으로 또박또박 문제 읽어주기 (TTS)
+  speakQuestion(q.question);
   
   if (state.timerInterval) clearInterval(state.timerInterval);
   
   state.timerInterval = setInterval(() => {
     state.timer--;
     els.timerText.textContent = state.timer;
-    els.timerBar.style.width = `${(state.timer / 15) * 100}%`;
+    els.timerBar.style.width = `${(state.timer / state.limitTime) * 100}%`;
     
     // 시간 만료 시
     if (state.timer <= 0) {
@@ -1077,7 +1209,7 @@ function showFeedback(isCorrect, questionObj, isTimeout = false) {
   }
   
   // 3.5초 대기 후 다음 문제로 자동 전환
-  setTimeout(() => {
+  state.feedbackTimeout = setTimeout(() => {
     els.feedbackOverlay.classList.remove('active');
     state.currentQuestionIndex++;
     
@@ -1093,6 +1225,7 @@ function showFeedback(isCorrect, questionObj, isTimeout = false) {
 // 9. 결과 집계 및 세레머니
 // ==========================================
 function showResult() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
   stopWebcam();
   sounds.cheer();
   

@@ -202,6 +202,27 @@
           </div>
         </div>
         
+        <!-- 퀴즈 추가 설정 패널 (제한시간, 문제수, TTS 토글) -->
+        <div class="admin-settings-panel">
+          <div class="setting-item">
+            <label for="input-quiz-time">퀴즈 제한 시간 (초) ⏰</label>
+            <input type="number" id="input-quiz-time" min="5" max="120" value="15">
+          </div>
+          <div class="setting-item">
+            <label for="input-quiz-count">출제할 문제 수 📝</label>
+            <input type="number" id="input-quiz-count" min="1" max="50" value="5">
+          </div>
+          <div class="setting-item">
+            <div class="toggle-container">
+              <span class="toggle-label">문제 읽어주기 (TTS) 🔊</span>
+              <label class="switch">
+                <input type="checkbox" id="chk-tts-enabled" checked>
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
         <div class="table-container">
           <table class="admin-table">
             <thead>
@@ -219,7 +240,7 @@
         </div>
         
         <div class="admin-footer">
-          <button id="btn-admin-exit" class="btn btn-secondary">닫기 및 홈으로</button>
+          <button id="btn-admin-exit" class="btn btn-secondary">저장 및 닫기</button>
         </div>
       </div>
     </section>
